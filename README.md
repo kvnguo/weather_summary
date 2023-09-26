@@ -1,1 +1,2 @@
-# weather_summary
+Format: ./program_executable geocode < weather.csv file 
+
