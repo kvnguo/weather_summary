@@ -1,59 +1,79 @@
-/*
-Declares structs and classes for use in Prog2.cpp
-*/
+// Header file defining all classes annd structs for later use 
+
+#ifndef SUPPORT
+#define SUPPORT
+
 #include <string>
+#include <unordered_map>
+#include <map>
 #include <vector>
+#include <list>
+#include <set>
+#include <queue>
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <iomanip>
+#include <algorithm>
+#include <limits>
+
 using namespace std;
 
-struct location {
+struct location
+{
   string city;
   string state;
   string geocode;
 
   bool operator<(const location &) const;
-  bool operator==(const location &) const;
+  void print() const;
 };
 
-struct data {
+struct rawdata
+{
   int month;
   float precip;
   int temp;
+
+  void print();
 };
 
-class list {
-  struct node {
-	node(const location &);
-	~node();
+struct summary
+{
+  int N;
 
-    void print_station();
-    void print_data();
-	void incorporate_data(const data &); 
+  float precip_avg;
+  float precip_max;
+  float precip_min;
 
-    location station;
+  float temp_avg;
+  float temp_max;
+  float temp_min;
 
-    int *N; 
-
-    float *total_precip;
-    float *max_precip;
-    float *min_precip;
-
-    int *total_temp;
-    int *max_temp;
-    int *min_temp;
-
-    node *next;
-  };
-
-  public:
-    list();
-    ~list();
-    void insert(const location &, const data &);
-    void print(const char *);
-
-  private:
-    node *head;
+  summary();
+  void operator+=(const rawdata &);
+  void print(string) const;
 };
 
-void printDashes();
+class database
+{
+public:
+  void init_rawdata(const string &);
+  void print_rawdata();
 
-string convertMonth(int);
+  void init_summary();
+  void print_summary(string);
+
+private:
+  void extract_rawdata(string &);
+  void extract_summary(int);
+
+  map<location, int> location_map;
+  vector<list<rawdata>> rawdata_cache;
+
+  unordered_map<string, set<string>> state_map;
+  unordered_map<string, location> geocode_map;
+  vector<vector<summary>> summary_cache;
+};
+
+#endif

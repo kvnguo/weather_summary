@@ -1,186 +1,201 @@
-/*
-Implementation of all structs and classes declared in Support.h
-*/
-#include <string> 
-#include <iostream>
-#include <iomanip>
+// Implimentation of the header file 
 
 #include "Support.h"
+
 using namespace std;
 
-//Overloaded the < operator to allow us to compare two locations and sort alphabetically by state then by city 
-bool location::operator<(const location &second) const {
-	if(state < second.state) {
-		return true; 
-	}
-	//Should only sort the city if the states are the same
-	else if(city < second.city && state == second.state){
-		return true;
-	}
-	return false; 
+/***********************
+ *   Location Struct   *
+ * *********************/
+
+// Operator overload enabling std::map to sort location objects 
+bool location::operator<(const location &other) const
+{
+    if (state < other.state)
+        return true;
+    else if (city < other.city && state == other.state)
+        return true;
+    return false;
 }
 
-//Overloaded the == operator to check if two cities are identical 
-bool location::operator==(const location &second) const {
-	return geocode == second.geocode;	
+// Prints out header for a location 
+void location::print() const
+{
+    for (int i = 0; i < 42; i++)
+        cout << "-";
+    cout << endl;
+
+    cout << city << ", " << state << " (" << geocode << ")" << endl;
+
+    for (int i = 0; i < 42; i++)
+        cout << "-";
+    cout << endl;
 }
 
-//Dynamically allocated memory for all variables of the node struct
-//Initialized all N to equal zero for later calculations 
-list::node::node(const location &n_station=location()) {
-	station = n_station;
-	
-    N = new int[12];
-	for (int i = 0; i < 12; i++) {
-		N[i] = 0;
-	}        
-    total_precip = new float[12];
-    max_precip = new float[12];
-    min_precip = new float[12];
+/**********************
+ *   Rawdata Struct   *
+***********************/
 
-    total_temp = new int[12];
-    max_temp = new int[12];
-    min_temp = new int[12];
-
-	next = nullptr; 
+// Prints rawdata info 
+void rawdata::print()
+{
+    cout << setw(5) << month << setw(6) << fixed << setprecision(2) << precip << setw(6) << temp << endl;
 }
 
-//Deletes all dynamically allocated variables constructed in the node constructor 
-list::node::~node() {
-	delete[] N; 
-	delete[] total_precip;
-    delete[] max_precip;
-    delete[] min_precip;
-    delete[] total_temp;
-    delete[] max_temp;
-    delete[] min_temp;
+
+/**********************
+ *   Summary Struct   *
+ * ********************/
+
+// Constructor for summary class initilizing weather variables 
+summary::summary() : N(0), precip_avg(0), precip_max(numeric_limits<int>::min()), precip_min(numeric_limits<int>::max()), temp_avg(0), temp_max(numeric_limits<int>::min()), temp_min(numeric_limits<int>::max()) {}
+
+// Operator overload enabling summary objects to incorperate raw data for calculations 
+void summary::operator+=(const rawdata &data)
+{
+    N++;
+
+    precip_avg += data.precip;
+    precip_max = max(precip_max, data.precip);
+    precip_min = min(precip_min, data.precip);
+
+    temp_avg += data.temp;
+    temp_max = max(temp_max, static_cast<float>(data.temp));
+    temp_min = min(temp_min, static_cast<float>(data.temp));
 }
 
-//Prints the location of the node 
-void list::node::print_station() {
-	printDashes(); 
-	cout << station.city << ", " << station.state << " (" << station.geocode << ")" << endl;
-	printDashes();			
+// Prints out summary object data 
+void summary::print(string month) const
+{
+    cout << month << ": "
+         << setw(5) << fixed << setprecision(2) << precip_min << " "
+         << setw(5) << precip_max << " "
+         << setw(5) << precip_avg / N << " : "
+         << setw(5) << setprecision(1) << temp_min << " "
+         << setw(5) << temp_max << " "
+         << setw(5) << temp_avg / N << endl;
 }
 
-//Prints all data of the node 
-void list::node::print_data() {
-	for(int i = 0; i < 12; i++) {
-		cout << right << setw(3) << convertMonth(i) << ":"
-			 << fixed << setprecision(2) << setw(6) << total_precip[i]
-			 << fixed << setprecision(2) << setw(6) << total_precip[i] / N[i]
-			 << fixed << setprecision(2) << setw(6) << max_precip[i]
-			 << fixed << setprecision(2) << setw(6) << min_precip[i] << " :" 
-			 << setw(4) << total_temp[i] / N[i]
-	  		 << setw(4) << max_temp[i]
-			 << setw(4) << min_temp[i]
-			 << endl;
-	}
-}
+/**********************
+ *   Database Class   *
+ * ********************/
+// Public:
+    // Populates location_map and rawdata_cache with data from csv file 
+    void database::init_rawdata(const string &filename)
+    {
+        // Check file
+        ifstream fin;
+        fin.open(filename);
+        if (!fin.is_open())
+        {
+            cerr << "error: cannot open invalid_file.csv" << endl
+                << "usage: ./executable [-rawdata] datafile" << endl;
+            return;
+        }
 
-//Incorporate data into the node 
-void list::node::incorporate_data(const data &dat) {
-    //For zero based indexing 
-	int i = dat.month - 1;
-    //If N[i] == 0, there is no data yet, meaning you have to set it initially 
-	if(N[i] == 0) {
-        total_precip[i] = dat.precip;
-        total_temp[i] = dat.temp;
-        max_precip[i] = dat.precip;
-        min_precip[i] = dat.precip;
-        max_temp[i] = dat.temp;
-        min_temp[i] = dat.temp;
+        string line;
+        while (getline(fin, line))
+        {
+            extract_rawdata(line); // Parses line 
+
+            // Extract data 
+            location loc;
+            rawdata data;
+            istringstream sin(line);
+            sin >> data.month >> loc.city >> loc.state >> loc.geocode >> data.precip >> data.temp;
+
+            // Check if location is in location_map
+            // If not, create a new list, add data, then add to the map 
+            // Otherwise, just add data in the correct location. 
+            if (location_map.find(loc) == location_map.end())
+            {
+                list<rawdata> cache_element;
+                cache_element.push_back(data);
+                rawdata_cache.push_back(cache_element);
+                location_map[loc] = rawdata_cache.size() - 1;
+            }
+            else
+                rawdata_cache[location_map[loc]].push_back(data);
+        }
+        fin.close();
     }
-	//Otherwise you update the data 
-    else {
-        total_precip[i] += dat.precip;
-        total_temp[i] += dat.temp;
-        if (dat.precip > max_precip[i]) {
-            max_precip[i] = dat.precip;
+
+    // Prints all raw data in order
+    void database::print_rawdata()
+    {
+        // std::map is already sorted 
+        for (map<location, int>::iterator map_it = location_map.begin(); map_it != location_map.end(); ++map_it)
+        {
+            map_it->first.print(); // Key is location 
+            list<rawdata> cache_element = rawdata_cache[map_it->second]; // Access each location's unique index
+            for (list<rawdata>::iterator list_it = cache_element.begin(); list_it != cache_element.end(); ++list_it)
+                list_it->print();
         }
-        if (dat.precip < min_precip[i]) {
-            min_precip[i] = dat.precip;
+    }
+
+
+     // Populates summary_cache, state_map, and geocode_map  with data 
+    void database::init_summary()
+    {
+        summary_cache.resize(rawdata_cache.size(), vector<summary>(12)); // Resize summary_cache to (# of locations) x 12 size 
+        for (map<location, int>::iterator map_it = location_map.begin(); map_it != location_map.end(); ++map_it)
+        {
+            state_map[map_it->first.state].insert(map_it->first.geocode); // Each state and its own set of geocodes for its states
+            geocode_map[map_it->first.geocode] = map_it->first; // Every geocode can access its own location object  
+            extract_summary(map_it->second); // Inserts data into right cell of summary_cache 
         }
-        if (dat.temp > max_temp[i]) {
-            max_temp[i] = dat.temp;
+    }
+
+    void database::print_summary(string target)
+    {
+        // Check if database contains the state or geocode 
+        if (state_map.count(target) == 0 && geocode_map.count(target) == 0)
+        {
+            cerr << "Target not found!" << endl;
+            return;
         }
-        if (dat.temp < min_temp[i]) {
-            min_temp[i] = dat.temp;
+
+        queue<string> q;
+        string months[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+
+        // If given a state, add all of its geocode into the queue
+        // Overwise, just add the geocode 
+        if (target.size() > 3)
+        {
+            for (set<string>::iterator it = state_map[target].begin(); it != state_map[target].end(); ++it)
+                q.push(*it);
         }
-     }
-    N[i]++;
-}
+        else
+            q.push(target);
 
-//Creates a sentinel node when a list object is created 
-list::list() {
-	head = new node(); 
-} 
+        // Prints out the each entry of the queue 
+        while (!q.empty())
+        {
+            int index = location_map[geocode_map[q.front()]]; // Gets unique index of the location 
+            geocode_map[q.front()].print(); // Prints out location header 
+            // Prints out the months 
+            for (unsigned long int i = 0; i < summary_cache[index].size(); i++)
+                summary_cache[index][i].print(months[i]);
+            q.pop(); 
+        }
+    }
 
-//Deletes all the nodes within the list  
-list:: ~list() {
-	while(head->next != nullptr) {
-		node* temp = head->next; 
-		head->next = temp->next; 
-		delete temp; 
-	}
-	delete head; 
-}
+// Private:
+    // Repalces spaces with underscores and commas with spaces 
+    void database::extract_rawdata(string &line)
+    {
+        for (long unsigned int i = 0; i < line.length(); i++)
+        {
+            if (line[i] == ' ')
+                line[i] = '_';
+            else if (line[i] == ',')
+                line[i] = ' ';
+        }
+    }
 
-//Inserts nodes into the linked list alphabetically 
-void list::insert(const location &loc, const data &dat) {
-	//I used two nodes for iterating since you can't access the prev node in a singlely linked list  
-	node *current = head->next;
-	node *prev = head;
-	//Iterate the two pointers until the current pointer points to the node that is either greater than, or equal to, the new location  
-	while(current != nullptr && current->station < loc) {
-		current = current->next; 
-		prev = prev->next; 
-	}
-	//If the current node is not null and the station is equal to the location, that means the location is already inside the linked list, so you only have to update the data 
-	if(current != nullptr && current->station == loc) {
-		current->incorporate_data(dat);
-	}
-	//Otherwise, the location isn't in the list yet so we have to make a new node, populate it with data, and then insert it into the list 
-	else {
-		node *n = new node(loc);
-		n->incorporate_data(dat);
-		n->next = current; 
-		prev->next = n;
-	}
-}
-
-//If there is a command line argument, we will iterate until we get to the location and print out the summary
-//Otherwise, we print out everything 
-void list::print(const char *s) {
-	node *it = head->next;  
-	if(s != NULL) {
-		while(it->station.geocode != s) {
-			it = it->next; 
-		}
-		it->print_station();
-		it->print_data();	
-		return; 
-	}
-	while(it != nullptr) {
-		it->print_station();
-		it->print_data();
-		it = it->next;
-	}
-}
-
-
-//Prints dashes  
-void printDashes() {
-	for(int i = 0; i < 42; i++){
-		cout << '-'; 
-	}
-	cout << endl; 
-}
-
-//Converts months from numeric to alphabet
-string convertMonth(int month) {
-    string months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-							"Jul","Aug", "Sep", "Oct", "Nov", "Dec"};
-    return months[month];
-}
-
+    // Accesses correct location and added data to the correct month 
+    void database::extract_summary(int index)
+    {
+        for (list<rawdata>::iterator list_it = rawdata_cache[index].begin(); list_it != rawdata_cache[index].end(); ++list_it)
+            summary_cache[index][list_it->month - 1] += *list_it;
+    }
